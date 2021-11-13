@@ -1,3 +1,5 @@
+//#include <string>
+//#include <sstream>
 // For BLE
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -18,14 +20,20 @@ bool deviceConnected = false;
 // Declare Fonction
 float getTemperature();
 
-
-#define enviornmentService BLEUUID((uint16_t)0x181A)
+// Temperature reading
+#define temperaratureService BLEUUID((uint16_t)0x2A1C)
 
 BLECharacteristic temperatureCharacteristic(
     BLEUUID((uint16_t)0x2A6E),
     BLECharacteristic::PROPERTY_READ |
         BLECharacteristic::PROPERTY_NOTIFY);
-//BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2901));
+
+// Setting service
+// #define uuidsettingsService BLEUUID((uint16_t)0x1801)
+// #define uuidMeasurementIntervalCharacteristic BLEUUID((uint16_t)0x2A21)
+#define uuidsettingsService "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define uuidMeasurementIntervalCharacteristic "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+BLECharacteristic *pMeasurementIntervalCharacteristic = NULL;
 
 class MyServerCallbacks : public BLEServerCallbacks
 {
@@ -37,13 +45,24 @@ class MyServerCallbacks : public BLEServerCallbacks
   void onDisconnect(BLEServer *pServer)
   {
     deviceConnected = false;
-  }
+  };
+};
+
+class SettingsCharateristicCallbacks : public BLECharacteristicCallbacks
+{
+  void OnWrite(BLECharacteristic *pCharacteristic)
+  {
+    std::string value = pCharacteristic->getValue();
+  };
 };
 
 float getTemperature()
 {
   sensors.requestTemperatures();
-  return sensors.getTempCByIndex(0);
+  float temperatureC = sensors.getTempCByIndex(0);
+  Serial.print("Temperature : ");
+  Serial.println(temperatureC);
+  return temperatureC;
 }
 
 void setup()
@@ -60,11 +79,30 @@ void setup()
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
+  // --------------Settings----------------
+  BLEService *pSettings = pServer->createService(uuidsettingsService);
+  BLECharacteristic *pMeasurementIntervalCharacteristic = pSettings->createCharacteristic(
+      uuidMeasurementIntervalCharacteristic,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE);
+
+  pMeasurementIntervalCharacteristic->setCallbacks(new SettingsCharateristicCallbacks());
+  pMeasurementIntervalCharacteristic->setValue("1000");
+
+  pMeasurementIntervalCharacteristic->addDescriptor(new BLE2902());
+
+  BLEDescriptor MeasurementIntervaleDescriptor(BLEUUID((uint16_t)0x2901));
+  MeasurementIntervaleDescriptor.setValue("Set or read interval or measurement");
+  pMeasurementIntervalCharacteristic->addDescriptor(&MeasurementIntervaleDescriptor);
+  pSettings->start();
+
+  // --------------Temperature----------------
+
   // Create the BLE Service
-  BLEService *pEnviornment = pServer->createService(enviornmentService);
+  BLEService *pTemprature = pServer->createService(temperaratureService);
 
   // Create a BLE Characteristic
-  pEnviornment->addCharacteristic(&temperatureCharacteristic);
+  pTemprature->addCharacteristic(&temperatureCharacteristic);
 
   // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
   // Create a BLE Descriptor
@@ -74,10 +112,10 @@ void setup()
   TemperatureDescriptor.setValue("Temperature -40 to 60°C");
   temperatureCharacteristic.addDescriptor(&TemperatureDescriptor);
 
-  pServer->getAdvertising()->addServiceUUID(enviornmentService);
+  pServer->getAdvertising()->addServiceUUID(temperaratureService);
 
   // Start the service
-  pEnviornment->start();
+  pTemprature->start();
 
   // Start advertising
   pServer->getAdvertising()->start();
@@ -97,5 +135,8 @@ void loop()
     temperatureCharacteristic.setValue((uint8_t *)&value, 2);
     temperatureCharacteristic.notify();
   }
+  //int i;
+  //std::istringstream(pMeasurementIntervalCharacteristic->getValue()) >> i;
+  //Serial.print(i);
   delay(1000);
 }
