@@ -85,7 +85,6 @@ class MyCallbacks : public BLECharacteristicCallbacks
       }
       else if (rxValue.find("B") != -1)
       {
-        sensorAddress.getAddress(insideThermometer, 0)
         Serial.print("Turning OFF!");
         //digitalWrite(LED, LOW);
       }

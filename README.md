@@ -8,6 +8,7 @@
 - high limit (HL)
 - low limit (LL)
 - Sensor Serial number (sensor_serial)
+- Device name (device_name)
 
 - temperature in °C (T)
 
@@ -17,3 +18,4 @@
 - Parameter of calibration b (cor_b=[values])
 - high limit (HL=[values])
 - low limit (LL=[values])
+- Device name (device_name=[values])
