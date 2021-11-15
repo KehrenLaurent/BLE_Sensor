@@ -26,6 +26,8 @@
 #include <BLE2902.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <iostream>
+#include <string>
 
 BLECharacteristic *pCharacteristic;
 bool deviceConnected = false;
@@ -45,6 +47,11 @@ DeviceAddress sensorAddress;
 #define SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+
+// Define commands
+const String INTERVALE = "intervale";
+const String COR_A = "cor_a";
+const String COR_B = "cor_b";
 
 class MyServerCallbacks : public BLEServerCallbacks
 {
@@ -77,16 +84,32 @@ class MyCallbacks : public BLECharacteristicCallbacks
 
       Serial.println();
 
-      // Do stuff based on the command received from the app
-      if (rxValue.find("A") != -1)
+      // Permet de determiner la commande et la valeur associée
+      std::string command = "";
+      std::string command_value = "";
+
+      if (rxValue.find("=") != -1)
       {
-        Serial.print("Turning ON!");
-        //digitalWrite(LED, HIGH);
+        command = rxValue.substr(0, rxValue.find("="));
+        command_value = rxValue.substr(rxValue.find("=") + 1, rxValue.length());
       }
-      else if (rxValue.find("B") != -1)
+      else
       {
-        Serial.print("Turning OFF!");
-        //digitalWrite(LED, LOW);
+        command = rxValue;
+      }
+
+      // Do stuff based on the command received from the app
+      if (INTERVALE.equals(command.c_str()))
+      {
+        Serial.print("Intervale Commande");
+      }
+      else if (COR_A.equals(command.c_str()))
+      {
+        Serial.print("Correction a");
+      }
+      else if (COR_B.equals(command.c_str()))
+      {
+        Serial.print("Correction b");
       }
 
       Serial.println();
