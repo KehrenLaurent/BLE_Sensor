@@ -8,7 +8,7 @@
 - low limit (LL)
 - Sensor Serial number (sensor_serial)
 - Device name (device_name)
-- temperature in °C (T)
+- temperature in °C (TEMP)
 
 # Informations to write
 - Measurement intervale (intervale=[values])
