@@ -31,6 +31,7 @@
 
 BLECharacteristic *pCharacteristic;
 bool deviceConnected = false;
+char *devive_name = "ESP32 UART Test";
 
 // Temperature sensor
 #define ONE_WIRE_BUS 15
@@ -52,6 +53,18 @@ DeviceAddress sensorAddress;
 const String INTERVALE = "intervale";
 const String COR_A = "cor_a";
 const String COR_B = "cor_b";
+const String HL = "HL";
+const String LL = "LL";
+const String SENSOR_SERIAL = "sensor_serial";
+const String DEVICE_NAME = "device_name";
+const String TEMP = "TEMP";
+
+// header function
+float getTemperature(); // Read temperature of sensor
+void sendTemperature();
+void sendDeviceName();
+
+// Define Server Callbacks
 
 class MyServerCallbacks : public BLEServerCallbacks
 {
@@ -65,6 +78,8 @@ class MyServerCallbacks : public BLEServerCallbacks
     deviceConnected = false;
   }
 };
+
+// Define Characteristique Callbacks
 
 class MyCallbacks : public BLECharacteristicCallbacks
 {
@@ -111,7 +126,28 @@ class MyCallbacks : public BLECharacteristicCallbacks
       {
         Serial.print("Correction b");
       }
-
+      else if (HL.equals(command.c_str()))
+      {
+        Serial.print("Read high limit");
+      }
+      else if (LL.equals(command.c_str()))
+      {
+        Serial.print("Read low limit");
+      }
+      else if (SENSOR_SERIAL.equals(command.c_str()))
+      {
+        Serial.print("Read Serial Number");
+      }
+      else if (DEVICE_NAME.equals(command.c_str()))
+      {
+        Serial.print("Read Device Name");
+        sendDeviceName();
+      }
+      else if (TEMP.equals(command.c_str()))
+      {
+        Serial.print("Read Temperature");
+        sendTemperature();
+      }
       Serial.println();
       Serial.println("*********");
     }
@@ -125,7 +161,7 @@ void setup()
   sensors.begin();
 
   // Create the BLE Device
-  BLEDevice::init("ESP32 UART Test"); // Give it a name
+  BLEDevice::init("devive_name"); // Give it a name
 
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
@@ -160,20 +196,22 @@ void loop()
   if (deviceConnected)
   {
     // Fabricate some arbitrary junk for now...
-    sensors.requestTemperatures();
-    temperature = sensors.getTempCByIndex(0); // This could be an actual sensor reading!
+
+    temperature = getTemperature();
+
+    sendTemperature();
 
     // Let's convert the value to a char array:
-    char txString[8];                     // make sure this is big enuffz
-    dtostrf(temperature, 1, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer
+    // char txString[8];                     // make sure this is big enuffz
+    // dtostrf(temperature, 1, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer
 
     //    pCharacteristic->setValue(&txValue, 1); // To send the integer value
     //    pCharacteristic->setValue("Hello!"); // Sending a test message
-    pCharacteristic->setValue(txString);
+    // pCharacteristic->setValue(txString);
 
     pCharacteristic->notify(); // Send the value to the app!
     Serial.print("*** Sent Value: ");
-    Serial.print(txString);
+    Serial.print(temperature);
     Serial.println(" ***");
 
     // You can add the rxValue checks down here instead
@@ -190,4 +228,39 @@ void loop()
     //    }
   }
   delay(10000);
+}
+
+// define fonction
+
+float getTemperature()
+{
+  sensors.requestTemperatures();
+  return sensors.getTempCByIndex(0);
+}
+
+void sendFormatedData(char data[8])
+{
+  pCharacteristic->setValue(data);
+  pCharacteristic->notify();
+}
+
+void sendTemperature()
+{
+  float temperature = getTemperature();
+  char command[30] = "TEMP=";
+  char txString[8];
+  dtostrf(temperature, 1, 2, txString);
+  strcat(command, txString);
+
+  pCharacteristic->setValue(command);
+  pCharacteristic->notify();
+}
+
+void sendDeviceName()
+{
+  char command[30] = "device_name=";
+  strcat(command, devive_name);
+
+  pCharacteristic->setValue(command);
+  pCharacteristic->notify();
 }
