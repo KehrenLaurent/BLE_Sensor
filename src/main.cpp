@@ -1,12 +1,7 @@
 /*
-    Video: https://www.youtube.com/watch?v=oCMOYS71NIU
-    Based on Neil Kolban example for IDF: https://github.com/nkolban/esp32-snippets/blob/master/cpp_utils/tests/BLE%20Tests/SampleNotify.cpp
-    Ported to Arduino ESP32 by Evandro Copercini
+    
 
-   Create a BLE server that, once we receive a connection, will send periodic notifications.
-   The service advertises itself as: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E
-   Has a characteristic of: 6E400002-B5A3-F393-E0A9-E50E24DCCA9E - used for receiving data with "WRITE" 
-   Has a characteristic of: 6E400003-B5A3-F393-E0A9-E50E24DCCA9E - used to send data with  "NOTIFY"
+   Create a server for BLE sensor
 
    The design of creating the BLE server is:
    1. Create a BLE Server
@@ -14,10 +9,7 @@
    3. Create a BLE Characteristic on the Service
    4. Create a BLE Descriptor on the characteristic
    5. Start the service.
-   6. Start advertising.
-
-   In this example rxValue is the data received (only accessible inside that function).
-   And txValue is the data to be sent, in this example just a byte incremented every second. 
+   6. Start advertising. 
 */
 #include <Arduino.h>
 #include <BLEDevice.h>
@@ -29,9 +21,8 @@
 #include <iostream>
 #include <string>
 
-BLECharacteristic *pCharacteristic;
-bool deviceConnected = false;
-char *devive_name = "ESP32 UART Test";
+String deviceName = "BLE Sensor"; // Device name of sensor
+int intervalOfMeasurement = 1000; // Interval of measurement
 
 // Temperature sensor
 #define ONE_WIRE_BUS 15
@@ -39,33 +30,27 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 char temperature;
 DeviceAddress sensorAddress;
-
-//std::string rxValue; // Could also make this a global var to access it in loop()
+bool deviceConnected;
 
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
+#define SERVICE_UUID "13012F00-F8C3-4F4A-A8F4-15CD926DA146" // UART service UUID
+#define CHARACTERISTIC_UUID_INTERVAL "13012F01-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_COR_A "13012F02-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_COR_B "13012F08-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_HIGH_LIMIT "13012F04-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_LOW_LIMIT "13012F05-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_SENSOR_SERIAL "13012F06-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_DEVICE_NAME "13012F07-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_TEMPERATURE "13012F02-F8C3-4F4A-A8F4-15CD926DA146"
 
-#define SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
-#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-
-// Define commands
-const String INTERVALE = "intervale";
-const String COR_A = "cor_a";
-const String COR_B = "cor_b";
-const String HL = "HL";
-const String LL = "LL";
-const String SENSOR_SERIAL = "sensor_serial";
-const String DEVICE_NAME = "device_name";
-const String TEMP = "TEMP";
+BLECharacteristic *TemperatureCharacteristic;
 
 // header function
 float getTemperature(); // Read temperature of sensor
-void sendTemperature();
-void sendDeviceName();
+void notifyTemperature();
 
 // Define Server Callbacks
-
 class MyServerCallbacks : public BLEServerCallbacks
 {
   void onConnect(BLEServer *pServer)
@@ -80,108 +65,71 @@ class MyServerCallbacks : public BLEServerCallbacks
 };
 
 // Define Characteristique Callbacks
-
-class MyCallbacks : public BLECharacteristicCallbacks
+class DeviceNameCharacteristicCallbacks : public BLECharacteristicCallbacks
 {
   void onWrite(BLECharacteristic *pCharacteristic)
   {
-    std::string rxValue = pCharacteristic->getValue();
+    std::string value = pCharacteristic->getValue();
 
-    if (rxValue.length() > 0)
+    if (value.length() > 0)
     {
-      Serial.println("*********");
-      Serial.print("Received Value: ");
+      deviceName = value.c_str();
+    }
+  }
+};
 
-      for (int i = 0; i < rxValue.length(); i++)
-      {
-        Serial.print(rxValue[i]);
-      }
-
-      Serial.println();
-
-      // Permet de determiner la commande et la valeur associée
-      std::string command = "";
-      std::string command_value = "";
-
-      if (rxValue.find("=") != -1)
-      {
-        command = rxValue.substr(0, rxValue.find("="));
-        command_value = rxValue.substr(rxValue.find("=") + 1, rxValue.length());
-      }
-      else
-      {
-        command = rxValue;
-      }
-
-      // Do stuff based on the command received from the app
-      if (INTERVALE.equals(command.c_str()))
-      {
-        Serial.print("Intervale Commande");
-      }
-      else if (COR_A.equals(command.c_str()))
-      {
-        Serial.print("Correction a");
-      }
-      else if (COR_B.equals(command.c_str()))
-      {
-        Serial.print("Correction b");
-      }
-      else if (HL.equals(command.c_str()))
-      {
-        Serial.print("Read high limit");
-      }
-      else if (LL.equals(command.c_str()))
-      {
-        Serial.print("Read low limit");
-      }
-      else if (SENSOR_SERIAL.equals(command.c_str()))
-      {
-        Serial.print("Read Serial Number");
-      }
-      else if (DEVICE_NAME.equals(command.c_str()))
-      {
-        Serial.print("Read Device Name");
-        sendDeviceName();
-      }
-      else if (TEMP.equals(command.c_str()))
-      {
-        Serial.print("Read Temperature");
-        sendTemperature();
-      }
-      Serial.println();
-      Serial.println("*********");
+class IntervalCharacteristicCallbacks : public BLECharacteristicCallbacks
+{
+  void onWrite(BLECharacteristic *pCharacteristic)
+  {
+    std::string value = pCharacteristic->getValue();
+    if (value.length() > 0)
+    {
+      String StringValue = value.c_str();
+      intervalOfMeasurement = StringValue.toInt();
     }
   }
 };
 
 void setup()
 {
-  Serial.begin(115200);
-
-  sensors.begin();
+  Serial.begin(115200); // run serial communication
+  sensors.begin();      // start ic2 service
 
   // Create the BLE Device
-  BLEDevice::init("devive_name"); // Give it a name
+  BLEDevice::init(std::string(deviceName.c_str())); // create and give name off ble device
 
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
+  //pServer->setCallbacks(new MyServerCallbacks());
 
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
 
-  // Create a BLE Characteristic
-  pCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_TX,
+  // Create characteristic for device name
+  BLECharacteristic *DeviceNameCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_DEVICE_NAME,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE);
+
+  DeviceNameCharacteristic->setCallbacks(new DeviceNameCharacteristicCallbacks());
+  DeviceNameCharacteristic->setValue(std::string(deviceName.c_str()));
+
+  // Create characteristic for interval of measurement
+  BLECharacteristic *IntervalOfMeasurementCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_INTERVAL,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE);
+
+  IntervalOfMeasurementCharacteristic->setCallbacks(new IntervalCharacteristicCallbacks());
+  IntervalOfMeasurementCharacteristic->setValue(intervalOfMeasurement);
+
+  // Create characteristic for notif temperature
+  BLECharacteristic *TemperatureCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_TEMPERATURE,
       BLECharacteristic::PROPERTY_NOTIFY);
 
-  pCharacteristic->addDescriptor(new BLE2902());
-
-  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_RX,
-      BLECharacteristic::PROPERTY_WRITE);
-
-  pCharacteristic->setCallbacks(new MyCallbacks());
+  TemperatureCharacteristic->addDescriptor(new BLE2902());
 
   // Start the service
   pService->start();
@@ -193,41 +141,14 @@ void setup()
 
 void loop()
 {
-  if (deviceConnected)
-  {
-    // Fabricate some arbitrary junk for now...
-
-    // temperature = getTemperature();
-
-    // sendTemperature();
-
-    // Let's convert the value to a char array:
-    // char txString[8];                     // make sure this is big enuffz
-    // dtostrf(temperature, 1, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer
-
-    //    pCharacteristic->setValue(&txValue, 1); // To send the integer value
-    //    pCharacteristic->setValue("Hello!"); // Sending a test message
-    // pCharacteristic->setValue(txString);
-
-    // pCharacteristic->notify(); // Send the value to the app!
-    // Serial.print("*** Sent Value: ");
-    // Serial.print(temperature);
-    // Serial.println(" ***");
-
-    // You can add the rxValue checks down here instead
-    // if you set "rxValue" as a global var at the top!
-    // Note you will have to delete "std::string" declaration
-    // of "rxValue" in the callback function.
-    //    if (rxValue.find("A") != -1) {
-    //      Serial.println("Turning ON!");
-    //      digitalWrite(LED, HIGH);
-    //    }
-    //    else if (rxValue.find("B") != -1) {
-    //      Serial.println("Turning OFF!");
-    //      digitalWrite(LED, LOW);
-    //    }
-  }
-  delay(10000);
+  // if (deviceConnected == true)
+  // {
+  //   notifyTemperature();
+  //   Serial.println("Send temperature");
+  // }
+  // delay(intervalOfMeasurement);
+  notifyTemperature();
+  delay(1000);
 }
 
 // define fonction
@@ -238,29 +159,12 @@ float getTemperature()
   return sensors.getTempCByIndex(0);
 }
 
-void sendFormatedData(char data[8])
-{
-  pCharacteristic->setValue(data);
-  pCharacteristic->notify();
-}
-
-void sendTemperature()
+void notifyTemperature()
 {
   float temperature = getTemperature();
-  char command[30] = "TEMP=";
   char txString[8];
   dtostrf(temperature, 1, 2, txString);
-  strcat(command, txString);
 
-  pCharacteristic->setValue(command);
-  pCharacteristic->notify();
-}
-
-void sendDeviceName()
-{
-  char command[30] = "device_name=";
-  strcat(command, devive_name);
-
-  pCharacteristic->setValue(command);
-  pCharacteristic->notify();
+  TemperatureCharacteristic->setValue(temperature);
+  TemperatureCharacteristic->notify();
 }
