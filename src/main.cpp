@@ -197,9 +197,9 @@ void loop()
   {
     // Fabricate some arbitrary junk for now...
 
-    temperature = getTemperature();
+    // temperature = getTemperature();
 
-    sendTemperature();
+    // sendTemperature();
 
     // Let's convert the value to a char array:
     // char txString[8];                     // make sure this is big enuffz
@@ -209,10 +209,10 @@ void loop()
     //    pCharacteristic->setValue("Hello!"); // Sending a test message
     // pCharacteristic->setValue(txString);
 
-    pCharacteristic->notify(); // Send the value to the app!
-    Serial.print("*** Sent Value: ");
-    Serial.print(temperature);
-    Serial.println(" ***");
+    // pCharacteristic->notify(); // Send the value to the app!
+    // Serial.print("*** Sent Value: ");
+    // Serial.print(temperature);
+    // Serial.println(" ***");
 
     // You can add the rxValue checks down here instead
     // if you set "rxValue" as a global var at the top!
