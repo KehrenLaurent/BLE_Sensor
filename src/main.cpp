@@ -1,5 +1,5 @@
 /*
-    
+
 
    Create a server for BLE sensor
 
@@ -9,7 +9,7 @@
    3. Create a BLE Characteristic on the Service
    4. Create a BLE Descriptor on the characteristic
    5. Start the service.
-   6. Start advertising. 
+   6. Start advertising.
 */
 #include <Arduino.h>
 #include <BLEDevice.h>
@@ -42,7 +42,7 @@ bool deviceConnected;
 #define CHARACTERISTIC_UUID_LOW_LIMIT "13012F05-F8C3-4F4A-A8F4-15CD926DA146"
 #define CHARACTERISTIC_UUID_SENSOR_SERIAL "13012F06-F8C3-4F4A-A8F4-15CD926DA146"
 #define CHARACTERISTIC_UUID_DEVICE_NAME "13012F07-F8C3-4F4A-A8F4-15CD926DA146"
-#define CHARACTERISTIC_UUID_TEMPERATURE "13012F02-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_TEMPERATURE "1d17cffa-ddea-45d5-bb06-0c56b404e224"
 
 BLECharacteristic *TemperatureCharacteristic;
 
@@ -101,7 +101,7 @@ void setup()
 
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
-  //pServer->setCallbacks(new MyServerCallbacks());
+  pServer->setCallbacks(new MyServerCallbacks());
 
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
@@ -125,7 +125,7 @@ void setup()
   IntervalOfMeasurementCharacteristic->setValue(intervalOfMeasurement);
 
   // Create characteristic for notif temperature
-  BLECharacteristic *TemperatureCharacteristic = pService->createCharacteristic(
+  TemperatureCharacteristic = pService->createCharacteristic(
       CHARACTERISTIC_UUID_TEMPERATURE,
       BLECharacteristic::PROPERTY_NOTIFY);
 
@@ -141,13 +141,13 @@ void setup()
 
 void loop()
 {
-  // if (deviceConnected == true)
-  // {
-  //   notifyTemperature();
-  //   Serial.println("Send temperature");
-  // }
+  if (deviceConnected == true)
+  {
+    Serial.println("Send temperature");
+    notifyTemperature();
+  }
   // delay(intervalOfMeasurement);
-  notifyTemperature();
+  // notifyTemperature();
   delay(1000);
 }
 
@@ -162,9 +162,11 @@ float getTemperature()
 void notifyTemperature()
 {
   float temperature = getTemperature();
-  char txString[8];
-  dtostrf(temperature, 1, 2, txString);
+  char temperatureString[8];
+  dtostrf(temperature, 1, 2, temperatureString);
+  Serial.print("Température de la sonde :");
+  Serial.println(temperatureString);
 
-  TemperatureCharacteristic->setValue(temperature);
+  TemperatureCharacteristic->setValue(temperatureString);
   TemperatureCharacteristic->notify();
 }
