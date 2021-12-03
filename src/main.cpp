@@ -22,7 +22,10 @@
 #include <string>
 
 String deviceName = "BLE Sensor"; // Device name of sensor
+DeviceAddress sensorSerial;       // Serial number of sensor
 int intervalOfMeasurement = 1000; // Interval of measurement
+float calibration_a = 1.0;        // Parameter of calibration a
+float calibration_b = 0.0;        // Parameter of calibration b
 
 // Temperature sensor
 #define ONE_WIRE_BUS 15
@@ -35,11 +38,9 @@ bool deviceConnected;
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 #define SERVICE_UUID "13012F00-F8C3-4F4A-A8F4-15CD926DA146" // UART service UUID
-#define CHARACTERISTIC_UUID_INTERVAL "13012F01-F8C3-4F4A-A8F4-15CD926DA146"
-#define CHARACTERISTIC_UUID_COR_A "13012F02-F8C3-4F4A-A8F4-15CD926DA146"
-#define CHARACTERISTIC_UUID_COR_B "13012F08-F8C3-4F4A-A8F4-15CD926DA146"
-#define CHARACTERISTIC_UUID_HIGH_LIMIT "13012F04-F8C3-4F4A-A8F4-15CD926DA146"
-#define CHARACTERISTIC_UUID_LOW_LIMIT "13012F05-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_INTERVAL_MEASUREMENT "13012F01-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_CALIBRATION_A "13012F02-F8C3-4F4A-A8F4-15CD926DA146"
+#define CHARACTERISTIC_UUID_CALIBRATION_B "13012F08-F8C3-4F4A-A8F4-15CD926DA146"
 #define CHARACTERISTIC_UUID_SENSOR_SERIAL "13012F06-F8C3-4F4A-A8F4-15CD926DA146"
 #define CHARACTERISTIC_UUID_DEVICE_NAME "13012F07-F8C3-4F4A-A8F4-15CD926DA146"
 #define CHARACTERISTIC_UUID_TEMPERATURE "1d17cffa-ddea-45d5-bb06-0c56b404e224"
@@ -48,7 +49,8 @@ BLECharacteristic *TemperatureCharacteristic;
 
 // header function
 float getTemperature(); // Read temperature of sensor
-void notifyTemperature();
+void notifyTemperature(); //Notify temperature
+
 
 // Define Server Callbacks
 class MyServerCallbacks : public BLEServerCallbacks
@@ -91,10 +93,43 @@ class IntervalCharacteristicCallbacks : public BLECharacteristicCallbacks
   }
 };
 
+class CalibrationACharacteristicCallbacks : public BLECharacteristicCallbacks
+{
+  void onWrite(BLECharacteristic *pCharacteristic)
+  {
+    std::string value = pCharacteristic->getValue();
+    if (value.length() > 0)
+    {
+      String StringValue = value.c_str();
+      calibration_a = StringValue.toFloat();
+    }
+  }
+};
+
+class CalibrationBCharacteristicCallbacks : public BLECharacteristicCallbacks
+{
+  void onWrite(BLECharacteristic *pCharacteristic)
+  {
+    std::string value = pCharacteristic->getValue();
+    if (value.length() > 0)
+    {
+      String StringValue = value.c_str();
+      calibration_b = StringValue.toFloat();
+    }
+  }
+};
+
 void setup()
 {
   Serial.begin(115200); // run serial communication
   sensors.begin();      // start ic2 service
+
+  // read serial number of sensor 
+  int deviceCount = sensors.getDeviceCount();
+  if (sensors.getDeviceCount() > 0)
+  {
+    sensors.getAddress(sensorSerial, 0);
+  }
 
   // Create the BLE Device
   BLEDevice::init(std::string(deviceName.c_str())); // create and give name off ble device
@@ -117,12 +152,37 @@ void setup()
 
   // Create characteristic for interval of measurement
   BLECharacteristic *IntervalOfMeasurementCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_INTERVAL,
+      CHARACTERISTIC_UUID_INTERVAL_MEASUREMENT,
       BLECharacteristic::PROPERTY_READ |
           BLECharacteristic::PROPERTY_WRITE);
 
   IntervalOfMeasurementCharacteristic->setCallbacks(new IntervalCharacteristicCallbacks());
   IntervalOfMeasurementCharacteristic->setValue(intervalOfMeasurement);
+
+  // Create characteristic for calibration a
+  BLECharacteristic *CalibrationACharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_CALIBRATION_A,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE);
+
+  CalibrationACharacteristic->setCallbacks(new CalibrationACharacteristicCallbacks());
+  CalibrationACharacteristic->setValue(calibration_a);
+
+  // Create characteristic for calibration a
+  BLECharacteristic *CalibrationBCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_CALIBRATION_B,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE);
+
+  CalibrationBCharacteristic->setCallbacks(new CalibrationBCharacteristicCallbacks());
+  CalibrationBCharacteristic->setValue(calibration_b);
+
+  // Create characteristic for sensor serial
+  BLECharacteristic *sensorSerialCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_SENSOR_SERIAL,
+      BLECharacteristic::PROPERTY_READ);
+
+  CalibrationBCharacteristic->setValue();
 
   // Create characteristic for notif temperature
   TemperatureCharacteristic = pService->createCharacteristic(
@@ -146,8 +206,6 @@ void loop()
     Serial.println("Send temperature");
     notifyTemperature();
   }
-  // delay(intervalOfMeasurement);
-  // notifyTemperature();
   delay(1000);
 }
 
@@ -156,7 +214,7 @@ void loop()
 float getTemperature()
 {
   sensors.requestTemperatures();
-  return sensors.getTempCByIndex(0);
+  return sensors.getTempCByIndex(0) * calibration_a + calibration_b;
 }
 
 void notifyTemperature()
@@ -164,9 +222,22 @@ void notifyTemperature()
   float temperature = getTemperature();
   char temperatureString[8];
   dtostrf(temperature, 1, 2, temperatureString);
-  Serial.print("Température de la sonde :");
-  Serial.println(temperatureString);
 
   TemperatureCharacteristic->setValue(temperatureString);
   TemperatureCharacteristic->notify();
+}
+
+String printAddress(DeviceAddress deviceAddress)
+{
+  String dataString;
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    if (deviceAddress[i] < 16){
+      dataString += "0";
+    }
+    
+      String dataString = "";
+
+      dataString += String(deviceAddress[i], HEX);
+  }
 }
