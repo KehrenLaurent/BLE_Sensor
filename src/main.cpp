@@ -32,7 +32,6 @@ float calibration_b = 0.0;        // Parameter of calibration b
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 char temperature;
-DeviceAddress sensorAddress;
 bool deviceConnected;
 
 // See the following for generating UUIDs:
@@ -48,9 +47,25 @@ bool deviceConnected;
 BLECharacteristic *TemperatureCharacteristic;
 
 // header function
-float getTemperature(); // Read temperature of sensor
-void notifyTemperature(); //Notify temperature
+float getTemperature();   // Read temperature of sensor
+void notifyTemperature(); // Notify temperature
 
+String convertDeviceAddressToString()
+{
+
+  uint8_t address[8];
+  String dataString;
+
+  if (oneWire.search(address))
+  {
+    oneWire.search(address);
+    for (uint8_t i = 0; i < 8; i++)
+    {
+      dataString += String(address[i], HEX);
+    }
+  }
+  return dataString;
+}
 
 // Define Server Callbacks
 class MyServerCallbacks : public BLEServerCallbacks
@@ -123,9 +138,9 @@ void setup()
 {
   Serial.begin(115200); // run serial communication
   sensors.begin();      // start ic2 service
+  sensors.requestTemperatures();
 
-  // read serial number of sensor 
-  int deviceCount = sensors.getDeviceCount();
+  // read serial number of sensor
   if (sensors.getDeviceCount() > 0)
   {
     sensors.getAddress(sensorSerial, 0);
@@ -181,8 +196,17 @@ void setup()
   BLECharacteristic *sensorSerialCharacteristic = pService->createCharacteristic(
       CHARACTERISTIC_UUID_SENSOR_SERIAL,
       BLECharacteristic::PROPERTY_READ);
+  
+    // Get address of sensors
+  String strSerial;
+  while (strSerial == "")
+  {
+    delay(100);
+    strSerial = convertDeviceAddressToString();
+    Serial.println(strSerial);
+  }
 
-  CalibrationBCharacteristic->setValue();
+  sensorSerialCharacteristic->setValue(std::string(strSerial.c_str()));
 
   // Create characteristic for notif temperature
   TemperatureCharacteristic = pService->createCharacteristic(
@@ -206,7 +230,6 @@ void loop()
     Serial.println("Send temperature");
     notifyTemperature();
   }
-  delay(1000);
 }
 
 // define fonction
@@ -225,19 +248,4 @@ void notifyTemperature()
 
   TemperatureCharacteristic->setValue(temperatureString);
   TemperatureCharacteristic->notify();
-}
-
-String printAddress(DeviceAddress deviceAddress)
-{
-  String dataString;
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    if (deviceAddress[i] < 16){
-      dataString += "0";
-    }
-    
-      String dataString = "";
-
-      dataString += String(deviceAddress[i], HEX);
-  }
 }
