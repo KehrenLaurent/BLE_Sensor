@@ -196,8 +196,8 @@ void setup()
   BLECharacteristic *sensorSerialCharacteristic = pService->createCharacteristic(
       CHARACTERISTIC_UUID_SENSOR_SERIAL,
       BLECharacteristic::PROPERTY_READ);
-  
-    // Get address of sensors
+
+  // Get address of sensors
   String strSerial;
   while (strSerial == "")
   {
@@ -229,6 +229,7 @@ void loop()
   {
     Serial.println("Send temperature");
     notifyTemperature();
+    delay(intervalOfMeasurement);
   }
 }
 
