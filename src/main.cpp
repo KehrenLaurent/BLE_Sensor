@@ -18,18 +18,17 @@
 #include <BLE2902.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <iostream>
-#include <string>
+// #include <iostream>
+// #include <string>
 
-String deviceName = "BLE Sensor"; // Device name of sensor
-DeviceAddress sensorSerial;       // Serial number of sensor
-int intervalOfMeasurement = 1000; // Interval of measurement
-float calibration_a = 1.0;        // Parameter of calibration a
-float calibration_b = 0.0;        // Parameter of calibration b
+String deviceName = "BLE Sensor";          // Device name of sensor
+DeviceAddress sensorSerial;                // Serial number of sensor
+unsigned int intervalOfMeasurement = 1000; // Interval of measurement
+float calibration_a = 1.0;                 // Parameter of calibration a
+float calibration_b = 0.0;                 // Parameter of calibration b
 
 // Temperature sensor
-#define ONE_WIRE_BUS 15
-OneWire oneWire(ONE_WIRE_BUS);
+OneWire oneWire(15); // 15 pin of data DS18B20
 DallasTemperature sensors(&oneWire);
 char temperature;
 bool deviceConnected;
@@ -50,7 +49,24 @@ BLECharacteristic *TemperatureCharacteristic;
 float getTemperature();   // Read temperature of sensor
 void notifyTemperature(); // Notify temperature
 
-String convertDeviceAddressToString()
+// Convert float to char to be send by BLE
+char *convertFloatToString(float value)
+{
+  char *valueChar = new char[8];
+  dtostrf(value, 1, 2, valueChar);
+  return valueChar;
+}
+
+// Convert int to char to be sens by BLE
+char *convertIntergerToChar(int value)
+{
+  char *valueChar = new char[8];
+  itoa(value, valueChar, 10);
+  return valueChar;
+}
+
+//
+String GetDeviceAddressToString()
 {
 
   uint8_t address[8];
@@ -103,7 +119,11 @@ class IntervalCharacteristicCallbacks : public BLECharacteristicCallbacks
     if (value.length() > 0)
     {
       String StringValue = value.c_str();
-      intervalOfMeasurement = StringValue.toInt();
+      Serial.println(StringValue);
+      if (StringValue.toInt())
+      {
+        intervalOfMeasurement = StringValue.toInt();
+      }
     }
   }
 };
@@ -116,7 +136,9 @@ class CalibrationACharacteristicCallbacks : public BLECharacteristicCallbacks
     if (value.length() > 0)
     {
       String StringValue = value.c_str();
+      Serial.println(StringValue);
       calibration_a = StringValue.toFloat();
+      Serial.println(calibration_a);
     }
   }
 };
@@ -130,6 +152,7 @@ class CalibrationBCharacteristicCallbacks : public BLECharacteristicCallbacks
     {
       String StringValue = value.c_str();
       calibration_b = StringValue.toFloat();
+      Serial.println(calibration_b);
     }
   }
 };
@@ -172,7 +195,7 @@ void setup()
           BLECharacteristic::PROPERTY_WRITE);
 
   IntervalOfMeasurementCharacteristic->setCallbacks(new IntervalCharacteristicCallbacks());
-  IntervalOfMeasurementCharacteristic->setValue(intervalOfMeasurement);
+  IntervalOfMeasurementCharacteristic->setValue(convertIntergerToChar(intervalOfMeasurement));
 
   // Create characteristic for calibration a
   BLECharacteristic *CalibrationACharacteristic = pService->createCharacteristic(
@@ -181,7 +204,7 @@ void setup()
           BLECharacteristic::PROPERTY_WRITE);
 
   CalibrationACharacteristic->setCallbacks(new CalibrationACharacteristicCallbacks());
-  CalibrationACharacteristic->setValue(calibration_a);
+  CalibrationACharacteristic->setValue(convertFloatToString(calibration_a));
 
   // Create characteristic for calibration a
   BLECharacteristic *CalibrationBCharacteristic = pService->createCharacteristic(
@@ -190,7 +213,7 @@ void setup()
           BLECharacteristic::PROPERTY_WRITE);
 
   CalibrationBCharacteristic->setCallbacks(new CalibrationBCharacteristicCallbacks());
-  CalibrationBCharacteristic->setValue(calibration_b);
+  CalibrationBCharacteristic->setValue(convertFloatToString(calibration_b));
 
   // Create characteristic for sensor serial
   BLECharacteristic *sensorSerialCharacteristic = pService->createCharacteristic(
@@ -202,7 +225,7 @@ void setup()
   while (strSerial == "")
   {
     delay(100);
-    strSerial = convertDeviceAddressToString();
+    strSerial = GetDeviceAddressToString();
     Serial.println(strSerial);
   }
 
@@ -229,6 +252,7 @@ void loop()
   {
     Serial.println("Send temperature");
     notifyTemperature();
+    Serial.println(intervalOfMeasurement);
     delay(intervalOfMeasurement);
   }
 }
@@ -243,10 +267,6 @@ float getTemperature()
 
 void notifyTemperature()
 {
-  float temperature = getTemperature();
-  char temperatureString[8];
-  dtostrf(temperature, 1, 2, temperatureString);
-
-  TemperatureCharacteristic->setValue(temperatureString);
+  TemperatureCharacteristic->setValue(convertFloatToString(getTemperature()));
   TemperatureCharacteristic->notify();
 }
