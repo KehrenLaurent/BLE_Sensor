@@ -18,9 +18,18 @@
 #include <BLE2902.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <EEPROM.h>
 // #include <iostream>
 // #include <string>
 
+// EETROM adress
+#define EEPROM_SIZE 20
+uint8_t deviceNameAddress = 0;
+uint8_t intervalOfMeasurementAddress = 3;
+uint8_t calibrationAAddress = 6;
+uint8_t calibrationBAddress = 9;
+
+// Base value
 String deviceName = "BLE Sensor";          // Device name of sensor
 DeviceAddress sensorSerial;                // Serial number of sensor
 unsigned int intervalOfMeasurement = 1000; // Interval of measurement
@@ -49,6 +58,37 @@ BLECharacteristic *TemperatureCharacteristic;
 float getTemperature();   // Read temperature of sensor
 void notifyTemperature(); // Notify temperature
 
+void setValueDefaultOrEetrom()
+{
+  // read device name
+  String deviceNameTemp;
+  EEPROM.get(deviceNameAddress, deviceNameTemp);
+  Serial.print("Read device Name : ");
+  Serial.println(deviceNameTemp);
+  if (deviceNameTemp.length() > 0)
+  {
+    deviceName = deviceNameTemp;
+  }
+
+  // Interval of measurement
+  unsigned int intervalOfMeasurementTemp;
+  EEPROM.get(intervalOfMeasurementAddress, intervalOfMeasurementTemp);
+  Serial.print("Read interval measurement : ");
+  Serial.println(intervalOfMeasurementTemp);
+  if (intervalOfMeasurementTemp)
+  {
+    intervalOfMeasurement = intervalOfMeasurementTemp;
+  }
+
+  // Calibration a
+  float calibration_a_temp;
+  EEPROM.get(calibrationAAddress, calibration_a_temp);
+  if (calibration_a_temp)
+  {
+    calibration_a = calibration_a_temp;
+  }
+}
+
 // Convert float to char to be send by BLE
 char *convertFloatToString(float value)
 {
@@ -65,7 +105,7 @@ char *convertIntergerToChar(int value)
   return valueChar;
 }
 
-//
+// Get sensor adress
 String GetDeviceAddressToString()
 {
 
@@ -107,6 +147,12 @@ class DeviceNameCharacteristicCallbacks : public BLECharacteristicCallbacks
     if (value.length() > 0)
     {
       deviceName = value.c_str();
+      Serial.print("Device name sto : ");
+      Serial.println(deviceName);
+
+      // storage value in eetrom
+      EEPROM.put(deviceNameAddress, String(deviceName));
+      EEPROM.commit();
     }
   }
 };
@@ -123,6 +169,10 @@ class IntervalCharacteristicCallbacks : public BLECharacteristicCallbacks
       if (StringValue.toInt())
       {
         intervalOfMeasurement = StringValue.toInt();
+
+        // storage value in eetrom
+        EEPROM.write(intervalOfMeasurementAddress, intervalOfMeasurement);
+        EEPROM.commit();
       }
     }
   }
@@ -139,6 +189,10 @@ class CalibrationACharacteristicCallbacks : public BLECharacteristicCallbacks
       Serial.println(StringValue);
       calibration_a = StringValue.toFloat();
       Serial.println(calibration_a);
+
+      // storage value in eetrom
+      EEPROM.writeFloat(calibrationAAddress, calibration_a);
+      EEPROM.commit();
     }
   }
 };
@@ -162,6 +216,12 @@ void setup()
   Serial.begin(115200); // run serial communication
   sensors.begin();      // start ic2 service
   sensors.requestTemperatures();
+
+  // Start eeprom
+  EEPROM.begin(EEPROM_SIZE);
+
+  // set value default or eetrom
+  setValueDefaultOrEetrom();
 
   // read serial number of sensor
   if (sensors.getDeviceCount() > 0)
