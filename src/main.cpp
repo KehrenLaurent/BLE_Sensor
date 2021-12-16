@@ -23,14 +23,16 @@
 // #include <string>
 
 // EETROM adress
-#define EEPROM_SIZE 20
-uint8_t deviceNameAddress = 0;
-uint8_t intervalOfMeasurementAddress = 3;
-uint8_t calibrationAAddress = 6;
-uint8_t calibrationBAddress = 9;
+#define EEPROM_SIZE 40
+uint8_t deviceNameAddressStart = 0;
+uint8_t deviceNameAddressEND = 20;
+uint8_t intervalOfMeasurementAddress = 20;
+uint8_t calibrationAAddress = 25;
+uint8_t calibrationBAddress = 30;
+uint8_t IsNotFirstRunAddress = 39;
 
 // Base value
-String deviceName = "BLE Sensor";          // Device name of sensor
+char deviceName[20];                       // Device name of sensor
 DeviceAddress sensorSerial;                // Serial number of sensor
 unsigned int intervalOfMeasurement = 1000; // Interval of measurement
 float calibration_a = 1.0;                 // Parameter of calibration a
@@ -41,6 +43,25 @@ OneWire oneWire(15); // 15 pin of data DS18B20
 DallasTemperature sensors(&oneWire);
 char temperature;
 bool deviceConnected;
+
+void writeCharToEEPROM(char *charToWrite, int addressStart, int addressEND)
+{
+  int j = 0;
+  for (int i = addressStart; i < addressEND; i++)
+  {
+    EEPROM.write(i, charToWrite[j]);
+    j++;
+    EEPROM.commit();
+  }
+}
+
+void readCharToEEPROM(char *charForStore, int addressStart, int addressEND)
+{
+  for (int i = addressStart; i < addressEND; i++)
+  {
+    charForStore[i] = char(EEPROM.read(i));
+  }
+}
 
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
@@ -58,24 +79,46 @@ BLECharacteristic *TemperatureCharacteristic;
 float getTemperature();   // Read temperature of sensor
 void notifyTemperature(); // Notify temperature
 
+void initEEPROM()
+{
+  // setup EEPROM after the fist run
+  if (int(EEPROM.read(IsNotFirstRunAddress)) == 1)
+  {
+    // read value in EEPROM
+    readCharToEEPROM(deviceName, deviceNameAddressStart, deviceNameAddressEND); // read device name
+  }
+  else
+  {
+    // set default value in EEPROM
+
+    // for device name
+    char deviceName[20] = "Sonde Test";
+    writeCharToEEPROM(deviceName, deviceNameAddressStart, deviceNameAddressEND);
+
+    // Change value IsNotFirstRun => 1 for save is not the fisrt run
+    EEPROM.write(IsNotFirstRunAddress, 1);
+    EEPROM.commit();
+  }
+}
+
 void setValueDefaultOrEetrom()
 {
   // read device name
-  String deviceNameTemp;
-  EEPROM.get(deviceNameAddress, deviceNameTemp);
-  Serial.print("Read device Name : ");
-  Serial.println(deviceNameTemp);
-  if (deviceNameTemp.length() > 0)
-  {
-    deviceName = deviceNameTemp;
-  }
+  // String deviceNameTemp;
+  // EEPROM.get(deviceNameAddress, deviceNameTemp);
+  // Serial.print("Read device Name : ");
+  // Serial.println(deviceNameTemp);
+  // if (deviceNameTemp.length() > 0)
+  // {
+  //   deviceName = deviceNameTemp;
+  // }
 
   // Interval of measurement
   unsigned int intervalOfMeasurementTemp;
   EEPROM.get(intervalOfMeasurementAddress, intervalOfMeasurementTemp);
   Serial.print("Read interval measurement : ");
   Serial.println(intervalOfMeasurementTemp);
-  if (intervalOfMeasurementTemp)
+  if (intervalOfMeasurementTemp > 30)
   {
     intervalOfMeasurement = intervalOfMeasurementTemp;
   }
@@ -83,6 +126,8 @@ void setValueDefaultOrEetrom()
   // Calibration a
   float calibration_a_temp;
   EEPROM.get(calibrationAAddress, calibration_a_temp);
+  Serial.print("Read calibration a : ");
+  Serial.println(calibration_a_temp);
   if (calibration_a_temp)
   {
     calibration_a = calibration_a_temp;
@@ -144,15 +189,28 @@ class DeviceNameCharacteristicCallbacks : public BLECharacteristicCallbacks
   {
     std::string value = pCharacteristic->getValue();
 
-    if (value.length() > 0)
+    if (value.length() > 0 && value.length() <= 20)
     {
-      deviceName = value.c_str();
+      const char *deviceNameTemp = value.c_str();
+      strcpy(deviceName, deviceNameTemp);
+
+      // for (int i = 0; i < sizeof(deviceName); i++)
+      // {
+      //   if (i < sizeof(deviceNameTemp))
+      //   {
+      //     deviceName[i] = deviceNameTemp[i];
+      //   }
+      //   else
+      //   {
+      //     deviceName[i] = " ";
+      //   }
+      // }
+
       Serial.print("Device name sto : ");
       Serial.println(deviceName);
 
       // storage value in eetrom
-      EEPROM.put(deviceNameAddress, String(deviceName));
-      EEPROM.commit();
+      writeCharToEEPROM(deviceName, deviceNameAddressStart, deviceNameAddressEND);
     }
   }
 };
@@ -221,7 +279,8 @@ void setup()
   EEPROM.begin(EEPROM_SIZE);
 
   // set value default or eetrom
-  setValueDefaultOrEetrom();
+  // setValueDefaultOrEetrom();
+  initEEPROM();
 
   // read serial number of sensor
   if (sensors.getDeviceCount() > 0)
@@ -230,7 +289,7 @@ void setup()
   }
 
   // Create the BLE Device
-  BLEDevice::init(std::string(deviceName.c_str())); // create and give name off ble device
+  BLEDevice::init(std::string(deviceName)); // create and give name off ble device
 
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
@@ -246,7 +305,7 @@ void setup()
           BLECharacteristic::PROPERTY_WRITE);
 
   DeviceNameCharacteristic->setCallbacks(new DeviceNameCharacteristicCallbacks());
-  DeviceNameCharacteristic->setValue(std::string(deviceName.c_str()));
+  DeviceNameCharacteristic->setValue(std::string(deviceName));
 
   // Create characteristic for interval of measurement
   BLECharacteristic *IntervalOfMeasurementCharacteristic = pService->createCharacteristic(
