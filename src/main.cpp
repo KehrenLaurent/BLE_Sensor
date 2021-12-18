@@ -32,11 +32,11 @@ uint8_t calibrationBAddress = 30;
 uint8_t IsNotFirstRunAddress = 39;
 
 // Base value
-char deviceName[20];                       // Device name of sensor
-DeviceAddress sensorSerial;                // Serial number of sensor
-unsigned int intervalOfMeasurement = 1000; // Interval of measurement
-float calibration_a = 1.0;                 // Parameter of calibration a
-float calibration_b = 0.0;                 // Parameter of calibration b
+char deviceName[20];                // Device name of sensor
+DeviceAddress sensorSerial;         // Serial number of sensor
+unsigned int intervalOfMeasurement; // Interval of measurement
+float calibration_a;                // Parameter of calibration a
+float calibration_b;                // Parameter of calibration b
 
 // Temperature sensor
 OneWire oneWire(15); // 15 pin of data DS18B20
@@ -85,18 +85,43 @@ void initEEPROM()
   if (int(EEPROM.read(IsNotFirstRunAddress)) == 1)
   {
     // read value in EEPROM
+
+    // reade device name
     readCharToEEPROM(deviceName, deviceNameAddressStart, deviceNameAddressEND); // read device name
+
+    // read intervalOfMeasurement
+    intervalOfMeasurement = EEPROM.readUInt(intervalOfMeasurementAddress);
+
+    // read calibration A
+    calibration_a = EEPROM.readFloat(calibrationAAddress);
+
+    // read calibration B
+    calibration_b = EEPROM.readFloat(calibrationBAddress);
   }
   else
   {
     // set default value in EEPROM
 
     // for device name
-    char deviceName[20] = "Sonde Test";
+    char deviceName[20] = "Sonde BLE";
     writeCharToEEPROM(deviceName, deviceNameAddressStart, deviceNameAddressEND);
+
+    // write default Interval of measurement
+    intervalOfMeasurement = 1000;
+    EEPROM.writeUInt(intervalOfMeasurementAddress, intervalOfMeasurement);
+
+    // write default calibration a
+    calibration_a = 1.0;
+    EEPROM.writeFloat(calibrationAAddress, calibration_a);
+
+    // write default calibration b
+    calibration_b = 0.0;
+    EEPROM.writeFloat(calibrationBAddress, calibration_b);
 
     // Change value IsNotFirstRun => 1 for save is not the fisrt run
     EEPROM.write(IsNotFirstRunAddress, 1);
+
+    // Save modification
     EEPROM.commit();
   }
 }
@@ -229,7 +254,7 @@ class IntervalCharacteristicCallbacks : public BLECharacteristicCallbacks
         intervalOfMeasurement = StringValue.toInt();
 
         // storage value in eetrom
-        EEPROM.write(intervalOfMeasurementAddress, intervalOfMeasurement);
+        EEPROM.writeUInt(intervalOfMeasurementAddress, intervalOfMeasurement);
         EEPROM.commit();
       }
     }
@@ -265,6 +290,10 @@ class CalibrationBCharacteristicCallbacks : public BLECharacteristicCallbacks
       String StringValue = value.c_str();
       calibration_b = StringValue.toFloat();
       Serial.println(calibration_b);
+
+      // storage value in eetrom
+      EEPROM.writeFloat(calibrationBAddress, calibration_b);
+      EEPROM.commit();
     }
   }
 };
